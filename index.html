@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e0a110">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Voice Cash Memo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@600;700&family=Hind+Siliguri:wght@400;500;600&family=Mukta:wght@400;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one narrow cash-memo column; bill lines in the middle, a fixed bottom dock holds the total and the mic. */
+:root{
+  --bg:#eef2ef; --paper:#ffffff; --ink:#1b2826; --muted:#5d6c69; --line:#dbe3df; --chip:#e4ebe7;
+  --accent:#e0a110; --accent-ink:#271c00; --accent-soft:#fbf0cf;
+  --ok:#2c7a4c; --warn:#a9510f; --warn-soft:#fde9d8; --bad:#b3261e; --bad-soft:#fbe3e1;
+  --f-display:'Baloo Da 2','Mukta',system-ui,sans-serif;
+  --f-body:'Hind Siliguri','Mukta',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-num:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111816; --paper:#19221f; --ink:#e6ece9; --muted:#98a7a2; --line:#2a3632; --chip:#22302b;
+  --accent:#f0b42a; --accent-ink:#221800; --accent-soft:#3a3015;
+  --ok:#6cc18c; --warn:#f2a25f; --warn-soft:#3b2716; --bad:#f28b82; --bad-soft:#3d1d1b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111816; --paper:#19221f; --ink:#e6ece9; --muted:#98a7a2; --line:#2a3632; --chip:#22302b;
+  --accent:#f0b42a; --accent-ink:#221800; --accent-soft:#3a3015;
+  --ok:#6cc18c; --warn:#f2a25f; --warn-soft:#3b2716; --bad:#f28b82; --bad-soft:#3d1d1b; color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
+.app{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 150px;display:flex;flex-direction:column;gap:14px}
+h1,h2{font-family:var(--f-display);margin:0;line-height:1.1;text-wrap:balance}
+h1{font-size:1.45rem}
+h2{font-size:1.05rem}
+.top{display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:center;gap:12px}
+.seal{width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:1.1rem;flex:none}
+.sub{margin:0;color:var(--muted);font-size:.85rem}
+.field{display:flex;flex-direction:column;gap:4px}
+.lbl{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button,.btn{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:9px 14px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+button:active{transform:translateY(1px)}
+.langs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{border-radius:999px;padding:6px 14px;background:var(--chip);border-color:transparent;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.heard{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.heard p{margin:0;font-size:1.02rem;min-height:1.45em;overflow-wrap:anywhere}
+.heard p.live{color:var(--muted);font-style:italic}
+.prompt{margin:0;color:var(--warn);font-weight:600;font-size:.95rem}
+.heard .row{display:flex;gap:8px;flex-wrap:wrap}
+.memo{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.memo-head{display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px;border-bottom:1px dashed var(--line);gap:10px}
+.memo-head small{color:var(--muted)}
+.example{margin:0;padding:8px 14px;background:var(--accent-soft);font-size:.85rem}
+ol.lines{list-style:none;margin:0;padding:0}
+.line{border-bottom:1px solid var(--line);padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;cursor:pointer;transition:background .6s}
+.line:last-child{border-bottom:0}
+.line.flash{background:var(--accent-soft);transition:none}
+.l-name{font-weight:600;font-size:1.02rem;min-width:0;overflow-wrap:anywhere}
+.l-alt{font-weight:400;color:var(--muted);font-size:.85rem;margin-left:6px}
+.l-calc{grid-column:1;color:var(--muted);font-family:var(--f-num);font-size:.9rem;font-variant-numeric:tabular-nums}
+.l-amt{grid-row:1/span 2;grid-column:2;align-self:center;font-family:var(--f-num);font-weight:600;font-size:1.05rem;font-variant-numeric:tabular-nums;text-align:right}
+.miss{color:var(--bad);font-weight:600}
+.tag{grid-column:1/-1;justify-self:start;font-size:.8rem;border-radius:6px;padding:2px 8px;font-weight:600}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.new{background:var(--chip);color:var(--muted)}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.line.alarm{background:var(--bad-soft);box-shadow:inset 4px 0 0 var(--bad)}
+.alarm-box{grid-column:1/-1;color:var(--bad);font-size:.92rem;margin-top:4px}
+.alarm-box .opts button{border-color:var(--bad);background:var(--paper);color:var(--ink)}
+.alarm-bar{background:var(--bad-soft);border:2px solid var(--bad);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.alarm-bar p{margin:0}
+.alarm-bar button{border-color:var(--bad);color:var(--bad)}
+.opts{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.opts button{border-color:var(--accent);background:var(--accent-soft)}
+.edit{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;cursor:default}
+.edit .full{grid-column:1/-1}
+.edit .acts{grid-column:1/-1;display:flex;gap:8px;justify-content:space-between}
+.del{color:var(--bad)}
+.empty{padding:26px 14px;color:var(--muted);text-align:center}
+.memo-foot{display:flex;justify-content:space-between;padding:12px 14px;border-top:1px dashed var(--line);font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.typer{display:flex;gap:8px}
+.examples{display:flex;gap:6px;flex-wrap:wrap}
+.examples button{font-weight:400;font-size:.85rem;padding:5px 10px;border-radius:8px;background:transparent;text-align:left}
+.actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.card p{margin:0}
+.muted{color:var(--muted)}
+.rates{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+.rates li{display:flex;justify-content:space-between;gap:10px}
+.rates span:last-child{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
+details.card summary{cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:1.05rem}
+.itemlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:.92rem}
+.itemlist b{font-weight:600}
+.say{color:var(--muted)}
+.help li{margin-bottom:4px}
+.help ul{margin:0;padding-left:18px}
+.dock{position:fixed;left:0;right:0;bottom:0;background:var(--paper);border-top:1px solid var(--line);padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-top:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));z-index:5}
+.dock-in{max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tot small{display:block;color:var(--muted);font-size:.8rem}
+.tot strong{font-family:var(--f-num);font-size:1.6rem;font-variant-numeric:tabular-nums}
+.mic{width:88px;height:88px;border-radius:50%;background:var(--accent);color:var(--accent-ink);border:0;flex:none;flex-direction:column;gap:0;font-size:.7rem;padding:0}
+.mic svg{width:30px;height:30px}
+.mic.on{background:var(--bad);color:#fff;animation:pulse 1.2s infinite}
+.mic.off{background:var(--chip);color:var(--muted)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--bad) 55%,transparent)}100%{box-shadow:0 0 0 18px transparent}}
+@media (prefers-reduced-motion:reduce){.mic.on{animation:none}.line{transition:none}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(110px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:.92rem;max-width:calc(100% - 32px);z-index:6;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="seal" aria-hidden="true">মেমো</div>
+      <div>
+        <h1>Voice Cash Memo</h1>
+        <p class="sub">Speak items in Bengali, Hindi or English. The app does the maths.</p>
+      </div>
+    </div>
+    <label class="field" for="customer"><span class="lbl">Customer</span>
+      <input id="customer" placeholder="Customer name (optional)" autocomplete="off"></label>
+  </header>
+
+  <div class="langs" role="group" aria-label="Speaking language">
+    <span class="lbl">Mic language</span>
+    <button class="chip" data-lang="bn" id="lang-bn">বাংলা</button>
+    <button class="chip" data-lang="hi" id="lang-hi">हिन्दी</button>
+    <button class="chip" data-lang="en" id="lang-en">English</button>
+    <button class="chip" id="readBackBtn" aria-pressed="true">Read back aloud</button>
+  </div>
+
+  <section class="heard" aria-live="polite">
+    <span class="lbl">Heard</span>
+    <p id="heard">Tap the mic and say an item, quantity and rate.</p>
+    <p class="prompt" id="prompt" hidden></p>
+    <button id="aiBtn" hidden></button>
+  </section>
+
+  <section class="memo" aria-label="Current bill">
+    <div class="memo-head"><h2>Bill <span id="billNo">#1</span></h2><small id="billDate"></small></div>
+    <p class="example" id="exampleNote" hidden>Example bill, so you can see how it works. Tap <b>New bill</b> to start a real one.</p>
+    <ol class="lines" id="lines"></ol>
+    <div class="empty" id="empty" hidden>No items yet. Say something like<br><b>“sona moong do kilo 145”</b></div>
+    <div class="memo-foot"><span id="itemCount">0 items</span><span id="roundNote"></span></div>
+  </section>
+
+  <form class="typer" id="typeForm" autocomplete="off">
+    <input id="typeInput" placeholder="Or type: lal badam 5 kilo 180" aria-label="Type an item">
+    <button type="submit">Add</button>
+  </form>
+  <details class="card"><summary>Practice phrases</summary><div class="examples" id="examples" aria-label="Try these"></div></details>
+
+  <div class="alarm-bar" id="alarmBar" hidden role="alert">
+    <p><b>Price alarm.</b> One or more rates are far from their usual price. That usually means a mistake. Check the red lines above.</p>
+    <button id="saveAnyway" type="button">Rates are correct, save anyway</button>
+  </div>
+  <div class="actions">
+    <button class="primary" id="saveBtn">Save bill</button>
+    <button id="newBtn">New bill</button>
+    <button id="shareBtn">Share bill (WhatsApp)</button>
+    <button id="copyBtn">Copy bill text</button>
+    <a id="waBtn" href="#" hidden></a>
+  </div>
+
+  <section class="card" aria-label="Today">
+    <h2>Today</h2>
+    <p id="todaySum" class="muted">No bills saved yet today.</p>
+    <ul class="rates" id="todayRates"></ul>
+    <p class="muted" id="demoNote" hidden>Showing example rates so you can try the price alarm. They disappear once you save your first real bill.</p>
+    <label class="field" for="alarmPct"><span class="lbl">Price alarm when a rate differs from usual by</span>
+      <select id="alarmPct"><option value="10">10% or more</option><option value="15">15% or more</option><option value="20">20% or more</option><option value="30">30% or more</option></select></label>
+  </section>
+
+  <section class="card" aria-label="Backup">
+    <h2>Backup</h2>
+    <p class="muted" id="backupNote"></p>
+    <div class="actions">
+      <button id="backupBtn" type="button">Save backup file</button>
+      <label class="btn" for="restoreInput">Restore backup<input id="restoreInput" type="file" accept="application/json,.json" hidden></label>
+    </div>
+  </section>
+
+  <details class="card" id="itemsBox">
+    <summary>Items the app knows</summary>
+    <p class="muted" id="learnCount"></p>
+    <ul class="itemlist" id="itemList"></ul>
+    <p class="muted">You don’t need to set up items. Whatever name is said goes on the bill as said, and is remembered when the bill is saved, along with its rate. If the same item gets two names (say Bengali and Hindi), tap the line and pick the known item once. The app links the names from then on.</p>
+  </details>
+
+  <details class="card help">
+    <summary>How to speak and correct</summary>
+    <ul>
+      <li><b>Mix languages freely</b>, even inside one sentence: “sona moong দু কেজি 145 rupaye”. Each word is matched by how it sounds, whatever script the mic writes it in. Keep the mic language on বাংলা; Hindi and English words still work. If one language keeps going wrong, try the हिन्दी chip for a day and compare.</li>
+      <li><b>Voice needs mobile data</b> (it uses Google’s free speech recognition). Without internet, type the items in the box.</li>
+      <li><b>No typing needed.</b> Tap the mic, speak, tap again. The app reads each line back aloud.</li>
+      <li><b>Spoken commands</b>: “customer Gupta”, “total kitna” / “মোট কত”, “bill padho” / “বিল পড়ো”, “save” / “বিল শেষ” / “ho gaya”, “naya bill” / “নতুন বিল”.</li>
+      <li><b>Answer a price alarm</b> by saying the correct rate (“nahi nahi 145”), or “thik hai” / “ঠিক আছে” if the rate is right.</li>
+      <li><b>Answer “which one?”</b> by saying it: “bhanga”, “sona”.</li>
+      <li><b>Item, quantity, rate</b> in any order: “sona moong do kilo 145”, “সোনা মুগ দু কেজি ১৪৫ টাকা”.</li>
+      <li><b>Several items at once</b>: join with “aur”, “আর” or “and”.</li>
+      <li><b>Change a rate</b>: “sona moong 140” or “sona moong 140 kar do”. The same line updates.</li>
+      <li><b>Fix the last thing said</b>: “nahi nahi 142”, “না না ১৪২”.</li>
+      <li><b>Add more of an item</b>: “aro ek kilo sona moong”, “add 2 kilo lal badam”.</li>
+      <li><b>Remove</b>: “lal badam hatao”, “লাল বাদাম বাদ দাও”.</li>
+      <li><b>Fractions</b>: aadha / আধা, dedh / দেড়, dhai / আড়াই, sawa, paune, ek pao.</li>
+      <li><b>Price alarm</b>: if a rate is far from that item’s usual rate over the last 7 days, the phone beeps, the line turns red, and the bill can’t be saved until someone checks it.</li>
+    </ul>
+  </details>
+</div>
+
+<div class="dock">
+  <div class="dock-in">
+    <div class="tot"><small>Total</small><strong id="total">₹0</strong></div>
+    <button class="mic" id="mic" aria-label="Start speaking"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg><span id="micLabel">Speak</span></button>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/*PARSER-START*/
+const N = s => String(s).normalize('NFC').toLowerCase()
+  .replace(/[‌‍]/g,'').replace(/[़়]/g,'')
+  .replace(/ँ/g,'ं').replace(/ঁ/g,'')
+  .replace(/[০-৯]/g,d=>String(d.charCodeAt(0)-0x09E6))
+  .replace(/[०-९]/g,d=>String(d.charCodeAt(0)-0x0966));
+/* Sound-based spelling: Bengali and Devanagari words are turned into rough Roman letters,
+   so "দো" (Hindi "do" written in Bengali letters) matches "do", and "दुई" matches "dui". */
+const SCRIPT = {
+  dev:{inh:'a', vir:'्',
+    cons:{'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'n','च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'n','ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n','त':'t','थ':'th','द':'d','ध':'dh','न':'n','प':'p','फ':'ph','ब':'b','भ':'bh','म':'m','य':'y','र':'r','ल':'l','व':'v','श':'sh','ष':'sh','स':'s','ह':'h'},
+    vow:{'अ':'a','आ':'aa','इ':'i','ई':'ee','उ':'u','ऊ':'oo','ए':'e','ऐ':'ai','ओ':'o','औ':'au'},
+    mat:{'ा':'aa','ि':'i','ी':'ee','ु':'u','ू':'oo','े':'e','ै':'ai','ो':'o','ौ':'au'},
+    mod:{'ं':'n','ः':'h'}},
+  ben:{inh:'o', vir:'্',
+    cons:{'ক':'k','খ':'kh','গ':'g','ঘ':'gh','ঙ':'ng','চ':'ch','ছ':'chh','জ':'j','ঝ':'jh','ঞ':'n','ট':'t','ঠ':'th','ড':'d','ঢ':'dh','ণ':'n','ত':'t','থ':'th','দ':'d','ধ':'dh','ন':'n','প':'p','ফ':'ph','ব':'b','ভ':'bh','ম':'m','য':'y','র':'r','ল':'l','শ':'sh','ষ':'sh','স':'s','হ':'h','ৎ':'t'},
+    vow:{'অ':'o','আ':'a','ই':'i','ঈ':'i','উ':'u','ঊ':'u','এ':'e','ঐ':'oi','ও':'o','ঔ':'ou'},
+    mat:{'া':'a','ি':'i','ী':'i','ু':'u','ূ':'u','ে':'e','ৈ':'oi','ো':'o','ৌ':'ou'},
+    mod:{'ং':'ng','ঃ':'h'}}
+};
+function tr(t){
+  if (!/[ऀ-৿]/.test(t)) return t;
+  const ch=[...t]; let out='';
+  for (let i=0;i<ch.length;i++){
+    const c=ch[i], S=c>='ঀ'?SCRIPT.ben:SCRIPT.dev, nx=ch[i+1];
+    if (S.cons[c]!==undefined){ out+=S.cons[c];
+      if (nx && (S.cons[nx]!==undefined || S.mod[nx]!==undefined) ) out+=S.inh;
+      continue; }
+    if (S.mat[c]!==undefined){ out+=S.mat[c]; continue; }
+    if (S.vow[c]!==undefined){ out+=S.vow[c]; continue; }
+    if (S.mod[c]!==undefined){ out+=S.mod[c]; continue; }
+    if (c===S.vir) continue;
+    out+=c;
+  }
+  return out;
+}
+const lat = s => s.replace(/aa/g,'a').replace(/ee/g,'i').replace(/oo/g,'u').replace(/w/g,'v').replace(/(.)\1+/g,'$1');
+const sound = t => lat(tr(t));
+function mk(entries,fuzzy){
+  const m=new Map(), l=new Map();
+  for (const [k,v] of entries){ const nk=N(k); m.set(nk,v); const lk=sound(nk); if (!l.has(lk)) l.set(lk,v); }
+  const find=t=>{ if (m.has(t)) return m.get(t); const s=sound(t); if (l.has(s)) return l.get(s);
+    if (fuzzy && s.length>=5) for (const [k,v] of l) if (k.length>=5 && lev(s,k)<=1) return v;
+    return undefined; };
+  return { has:t=>find(t)!==undefined, get:find };
+}
+const mapOf = o => mk(Object.entries(o));
+const setOf = a => mk(a.map(x=>[x,true]));
+
+const NUMW = mapOf({
+  ek:1,ekta:1,one:1, do:2,dui:2,du:2,duto:2,duta:2,two:2, teen:3,tin:3,tinte:3,three:3,
+  char:4,chaar:4,charte:4,four:4, paanch:5,panch:5,pach:5,panchta:5,five:5,
+  chhe:6,chhah:6,chah:6,che:6,chhoy:6,choy:6,six:6, saat:7,sat:7,seven:7, aath:8,aat:8,eight:8,
+  nau:9,noy:9,nine:9, das:10,dus:10,dosh:10,ten:10, gyarah:11,egaro:11,eleven:11, barah:12,twelve:12,
+  terah:13,tero:13, chaudah:14,choddo:14, pandrah:15,ponero:15,fifteen:15, solah:16,sholo:16,
+  satrah:17,sotero:17, atharah:18,atharo:18, unnis:19,unish:19, bees:20,bis:20,bish:20,kuri:20,twenty:20,
+  pachees:25,pochish:25, tees:30,tirish:30,thirty:30, chalis:40,challish:40,forty:40,
+  pachas:50,pachaas:50,ponchash:50,fifty:50, saath:60,shat:60,sixty:60, sattar:70,sottor:70,seventy:70,
+  assi:80,ashi:80,eighty:80, nabbe:90,nobboi:90,ninety:90,
+  'एक':1,'दो':2,'तीन':3,'चार':4,'पांच':5,'पाँच':5,'छह':6,'छः':6,'छे':6,'सात':7,'आठ':8,'नौ':9,'दस':10,
+  'ग्यारह':11,'बारह':12,'तेरह':13,'चौदह':14,'पंद्रह':15,'पन्द्रह':15,'सोलह':16,'सत्रह':17,'अठारह':18,'उन्नीस':19,
+  'बीस':20,'पच्चीस':25,'तीस':30,'चालीस':40,'पचास':50,'साठ':60,'सत्तर':70,'अस्सी':80,'नब्बे':90,
+  'এক':1,'একটা':1,'দুই':2,'দু':2,'দুটো':2,'দুটা':2,'তিন':3,'তিনটে':3,'চার':4,'চারটে':4,'পাঁচ':5,'পাঁচটা':5,
+  'ছয়':6,'ছ':6,'সাত':7,'আট':8,'নয়':9,'দশ':10,'এগারো':11,'বারো':12,'তেরো':13,'চোদ্দ':14,'পনেরো':15,'ষোলো':16,
+  'সতেরো':17,'আঠারো':18,'উনিশ':19,'বিশ':20,'কুড়ি':20,'পঁচিশ':25,'তিরিশ':30,'ত্রিশ':30,'চল্লিশ':40,'পঞ্চাশ':50,
+  'ষাট':60,'সত্তর':70,'আশি':80,'নব্বই':90
+});
+const FRAC = mapOf({aadha:.5,adha:.5,aadhi:.5,adhi:.5,aadh:.5,half:.5,'आधा':.5,'आधी':.5,'আধা':.5,'আধ':.5,
+  dedh:1.5,der:1.5,derh:1.5,deddh:1.5,'डेढ़':1.5,'দেড়':1.5, dhai:2.5,arai:2.5,arhai:2.5,adai:2.5,adhai:2.5,'ढाई':2.5,'আড়াই':2.5,
+  quarter:.25});
+const MODS = mapOf({sawa:.25,sowa:.25,shoa:.25,swa:.25,'सवा':.25,'সোয়া':.25, paune:-.25,poune:-.25,pone:-.25,'पौने':-.25,'পৌনে':-.25,
+  saadhe:.5,sadhe:.5,sare:.5,sarhe:.5,'साढ़े':.5,'সাড়ে':.5});
+const MULT = mapOf({sau:100,sou:100,sho:100,shoo:100,hundred:100,'सौ':100,'শো':100,'শ':100,'শত':100,'সো':100,
+  hazar:1000,hazaar:1000,hajar:1000,hajaar:1000,thousand:1000,'हजार':1000,'हज़ार':1000,'হাজার':1000});
+const HUND_SUF = ['শো','শ','সো','sho','sau','shoo','sou'].map(N);
+const CLS_SUF = ['টা','টি','টো','টে','ta','ti','to','te'].map(N);
+const UNITS = (()=>{ const e=[]; const add=(base,factor,w)=>w.forEach(x=>e.push([x,{base,factor}]));
+  add('kg',1,['kg','kgs','kilo','kilos','killo','kilogram','kilograms','keji','kezi','kiji','किलो','केजी','কেজি','কিলো','কিলোগ্রাম']);
+  add('kg',.001,['g','gm','gms','gram','grams','gramme','ग्राम','গ্রাম']);
+  add('kg',.25,['pao','pav','paav','pau','poa','powa','पाव','পোয়া']);
+  add('quintal',1,['quintal','quintals','kuntal','qtl','कुंटल','क्विंटल','কুইন্টাল','কুইন্টল']);
+  add('bag',1,['bori','bora','bosta','basta','bag','bags','sack','बोरी','বস্তা','বোরা']);
+  add('pkt',1,['packet','packets','pkt','paket','पैकेट','প্যাকেট']);
+  add('box',1,['peti','box','carton','पेटी','পেটি','বাক্স','কার্টন']);
+  add('pc',1,['piece','pieces','pc','pcs','पीस','পিস']);
+  add('dozen',1,['dozen','darjan','दर्जन','ডজন']);
+  add('L',1,['litre','liter','litres','liters','ltr','l','लीटर','লিটার']);
+  add('L',.001,['ml','मिली','মিলি']);
+  return mk(e,true); })();
+const SEP = setOf(['aur','or','and','ar','ebong','phir','fir','then','next','আর','এবং','তারপর','और','फिर']);
+const RATE_PRE = setOf(['rate','ret','rait','bhav','bhaw','bhao','dam','daam','price','₹','@','rs','inr','at','রেট','দাম','दाम','भाव','रेट']);
+const RATE_POST = mk(['rupaye','rupaiye','rupay','rupee','rupees','rupiya','rupaya','rupiye','rupoye','rupye','rs','taka','taaka','tk','ka','ke','ki','kore','kare','wala','vala','each',
+  'টাকা','টাকায়','টাকার','করে','রুপয়ে','রুপিয়া','रुपये','रुपए','रुपया','रूपये','रूपए','का','के','की','वाला'].map(x=>[x,true]),true);
+const PER = setOf(['per','prati','proti','प्रति','প্রতি']);
+const DO_VERB_PREV = setOf(['de','kar','kr','le','dena','karo','bata','bol','likh','दे','कर','ले','लिख','बोल']);
+const REMOVE = setOf(['hatao','hata','hatado','nikalo','nikal','cancel','remove','delete','bad','baad','batil','kato','kaato','हटाओ','हटा','निकालो','निकाल','रद्द','কাটো','বাদ','বাতিল']);
+const ADD = setOf(['add','plus','jodo','jod','aro','aaro','more','extra','আরও','আরো','जोड़ो','जोड़']);
+const CORR = setOf(['nahi','nahin','na','no','not','galat','sorry','bhul','নহি','না','ভুল','नहीं','ना','गलत']);
+const STOP = setOf(['do','दो','ka','ki','ke','ko','bhi','wala','wali','wale','dena','dedo','de','dijiye','chahiye','hai','he','hain','please','plz','bhaiya','bhai','ji','sir','kar','karo','kardo','kr',
+  'er','ta','ti','to','dao','din','dibe','deben','chai','lagbe','ache','koro','kore','dada','of','the','a','an','give','me','need','want','change','badlo','update','set','make','it','is',
+  'का','की','के','को','भी','वाला','वाली','दे','दीजिए','चाहिए','है','हैं','जी','भैया','कर','करो','এর','টা','টি','দাও','দিন','দেবেন','চাই','লাগবে','আছে','ও','ভাই','দাদা','করো','করে']);
+
+function tokenize(s){
+  s = N(s).replace(/(\d),(\d)/g,'$1$2').replace(/₹/g,' ₹ ').replace(/@/g,' @ ').replace(/\//g,' per ')
+    .replace(/([a-z])\.(\d)/g,'$1 $2').replace(/(\d)([^\d\s.])/g,'$1 $2').replace(/([^\d\s.])(\d)/g,'$1 $2');
+  return s.split(/[\s,;:!?।|"'()\-–—]+/).map(t=>t.replace(/^\.+|\.+$/g,'')).filter(Boolean);
+}
+function smallNum(t){
+  if (/^\d+(\.\d+)?$/.test(t)) return {v:parseFloat(t), digit:true};
+  if (NUMW.has(t)) return {v:NUMW.get(t)};
+  if (FRAC.has(t)) return {v:FRAC.get(t)};
+  for (const suf of HUND_SUF){ if (t.length>suf.length && t.endsWith(suf)){ const p=t.slice(0,-suf.length); const pv=NUMW.has(p)?NUMW.get(p):FRAC.get(p); if (pv!=null) return {v:pv*100, hund:true}; } }
+  for (const suf of CLS_SUF){ if (t.length>suf.length && t.endsWith(suf)){ const p=t.slice(0,-suf.length); if (NUMW.has(p)) return {v:NUMW.get(p)}; } }
+  return null;
+}
+function readNumber(T,i){
+  let total=0, cur=null, mod=0, j=i, got=false;
+  while (j<T.length){
+    const t=T[j];
+    if (sound(t)==='do' && j>0 && DO_VERB_PREV.has(T[j-1])) break;
+    if (MODS.has(t)){ if (cur!==null) break; mod+=MODS.get(t); j++; continue; }
+    if (MULT.has(t)){ if (!got && mod===0 && j>i) break; total+=((cur===null?1:cur)+mod)*MULT.get(t); cur=null; mod=0; got=true; j++; continue; }
+    const s=smallNum(t);
+    if (s){
+      if (cur!==null) break;
+      if (s.hund){ if (got && total>0) break; total+=s.v+mod*100; mod=0; got=true; j++; continue; }
+      cur=s.v; got=true; j++; continue;
+    }
+    break;
+  }
+  if (!got){ if (mod>0 && j<T.length && UNITS.has(T[j])) return {value:1+mod, next:j}; // "sawa kilo" = 1.25, "saadhe kilo" = 1.5
+             if (mod<0 && j<T.length && UNITS.has(T[j])) return {value:1+mod, next:j}; // "paune kilo" = 0.75
+             return null; }
+  return {value: Math.round((total+(cur===null?0:cur+mod))*1000)/1000, next:j};
+}
+function lex(text){
+  const T=tokenize(text), out=[]; let ratePre=false;
+  for (let i=0;i<T.length;){
+    const t=T[i];
+    if (SEP.has(t)){ out.push({type:'sep'}); ratePre=false; i++; continue; }
+    if (RATE_PRE.has(t)){ ratePre=true; i++; continue; }
+    const num=readNumber(T,i);
+    if (num){
+      let j=num.next, unit=null, isRate=ratePre; ratePre=false;
+      if (j<T.length && UNITS.has(T[j])){ unit=UNITS.get(T[j]); j++; if (unit.factor===.25 && j<T.length && UNITS.get(T[j])?.base==='kg') j++; }
+      if (!unit && j<T.length && RATE_POST.has(T[j])){ isRate=true; j++; while (j<T.length && (RATE_POST.has(T[j])||PER.has(T[j]))) j++; if (j<T.length && UNITS.has(T[j])) j++; }
+      else if (!unit && j<T.length && PER.has(T[j])){ isRate=true; j++; if (j<T.length && UNITS.has(T[j])) j++; }
+      else if (unit && j<T.length && PER.has(T[j])){ isRate=true; unit=null; j++; if (j<T.length && UNITS.has(T[j])) j++; }
+      if (isRate) unit=null;
+      out.push({type:'num', value:num.value, unit, isRate});
+      i=j; continue;
+    }
+    if (UNITS.has(t) && UNITS.get(t).factor===.25){ out.push({type:'num',value:1,unit:UNITS.get(t),isRate:false}); i++; if (i<T.length && UNITS.get(T[i])?.base==='kg') i++; continue; }
+    if (REMOVE.has(t)){ out.push({type:'verb',kind:'remove'}); i++; continue; }
+    if (ADD.has(t)){ out.push({type:'verb',kind:'add'}); i++; continue; }
+    if (CORR.has(t)){ out.push({type:'verb',kind:'corr'}); i++; continue; }
+    if (STOP.has(t)||UNITS.has(t)||RATE_POST.has(t)||PER.has(t)){ i++; continue; }
+    out.push({type:'name', text:t}); i++;
+  }
+  return out;
+}
+function segment(lexes){
+  const segs=[]; let cur;
+  const fresh=()=>{ cur={lex:[],hasItem:false,numAfterItem:0,nums:0,hasQty:false}; };
+  const push=()=>{ if (cur.lex.length) segs.push(cur.lex); fresh(); };
+  fresh();
+  for (const x of lexes){
+    if (x.type==='sep'){ push(); continue; }
+    if (x.type==='verb' && x.kind==='corr'){ if (cur.hasItem || cur.nums) push(); cur.lex.push(x); continue; }
+    if (x.type==='name'){ if (cur.hasItem && cur.numAfterItem>0) push(); cur.lex.push(x); cur.hasItem=true; continue; }
+    if (x.type==='num'){
+      const qtyLike = !!x.unit && !x.isRate;
+      if (cur.hasItem && (cur.nums>=2 || (qtyLike && cur.hasQty))) push();
+      cur.lex.push(x); cur.nums++; if (qtyLike) cur.hasQty=true; if (cur.hasItem) cur.numAfterItem++;
+      continue;
+    }
+    cur.lex.push(x);
+  }
+  push();
+  return segs;
+}
+function assignNums(nums){
+  let qty=null, unit=null, rate=null, bare=null; const plain=[];
+  for (const n of nums){
+    if (n.isRate) rate=n.value;
+    else if (n.unit && qty===null){ qty=Math.round(n.value*n.unit.factor*1000)/1000; unit=n.unit.base; }
+    else if (n.unit && rate===null) rate=n.value;
+    else plain.push(n.value);
+  }
+  if (plain.length>=2 && qty===null && rate===null){ qty=plain[0]; rate=plain[plain.length-1]; }
+  else if (plain.length){
+    if (qty===null && rate!==null) qty=plain[0];
+    else if (qty!==null && rate===null) rate=plain[plain.length-1];
+    else if (qty===null && rate===null) bare=plain[0];
+  }
+  return {qty,unit,rate,bare};
+}
+
+/* Catalog: the shop's items. Each item needs certain "words" (concepts) to be heard. */
+const CONCEPTS = {
+  GOTA:['gota','gotha','sabut','whole','গোটা','गोटा','साबुत'],
+  SONA:['sona','shona','sonamoong','sonamung','sonamug','সোনা','সোনামুগ','सोना'],
+  MOONG:['moong','mung','mug','moog','mong','munga','sonamoong','sonamung','sonamug','মুগ','মুং','সোনামুগ','मूंग','मुंग','मूग','मुग'],
+  MASUR:['masur','masoor','mosur','moshur','musur','masuri','মসুর','মুসুর','মোসুর','मसूर','मसुर'],
+  BADA:['bada','boro','bara','bado','big','বড়','বড়ো','बड़ा','बड़े'],
+  BHANGA:['bhanga','bhangа','bhaanga','split','tuta','toota','ভাঙা','ভাঙ্গা','भांगा','भंगा','टूटा'],
+  CHOTO:['choto','chhoto','chota','chhota','small','ছোট','ছোটো','छोटा','छोटी'],
+  LAL:['lal','laal','red','লাল','लाल'],
+  SADA:['sada','shada','saada','safed','white','সাদা','सादा','सफेद','सफ़ेद'],
+  BADAM:['badam','baadam','peanut','peanuts','বাদাম','बादाम'],
+  RAHAR:['rahar','arhar','arahar','tur','toor','tuvar','অড়হর','অরহর','রাহার','রহর','अरहर','राहर','तुअर','तूर']
+};
+const CONCEPT_N = Object.fromEntries(Object.entries(CONCEPTS).map(([k,v])=>[k,[...new Set([...v.map(N), ...v.map(x=>sound(N(x)))])]]));
+const BUILTIN = [
+  {id:'gota-moong',   name:'Gota moong',     alt:'গোটা মুগ',     need:['GOTA','MOONG'],  head:'MOONG', say:'gota moong, sabut moong, গোটা মুগ'},
+  {id:'sona-moong',   name:'Sona moong dal', alt:'সোনা মুগ ডাল', need:['SONA','MOONG'],  head:'MOONG', say:'sona moong, sona, সোনা মুগ, सोना मूंग'},
+  {id:'bada-masur',   name:'Bada masur',     alt:'বড় মসুর',      need:['BADA','MASUR'],  head:'MASUR', say:'bada / boro masur, বড় মসুর'},
+  {id:'bhanga-masur', name:'Bhanga masur',   alt:'ভাঙা মসুর',    need:['BHANGA','MASUR'],head:'MASUR', say:'bhanga masur, ভাঙা মসুর'},
+  {id:'choto-masur',  name:'Choto masur',    alt:'ছোট মসুর',     need:['CHOTO','MASUR'], head:'MASUR', say:'choto / chhota masur, ছোট মসুর'},
+  {id:'lal-badam',    name:'Lal badam',      alt:'লাল বাদাম',    need:['LAL','BADAM'],   head:'BADAM', say:'lal badam, লাল বাদাম, लाल बादाम'},
+  {id:'sada-badam',   name:'Sada badam',     alt:'সাদা বাদাম',   need:['SADA','BADAM'],  head:'BADAM', say:'sada / safed badam, সাদা বাদাম'},
+  {id:'rahar-dal',    name:'Rahar dal',      alt:'অড়হর ডাল',    need:['RAHAR'],         head:'RAHAR', say:'rahar, arhar, toor, অড়হর'}
+];
+const HEAD_LABEL = {MOONG:'moong', MASUR:'masur', BADAM:'badam', RAHAR:'rahar'};
+function lev(a,b){ if (Math.abs(a.length-b.length)>1) return 2; const d=[...Array(b.length+1).keys()];
+  for (let i=1;i<=a.length;i++){ let p=d[0]; d[0]=i; for (let j=1;j<=b.length;j++){ const t=d[j]; d[j]=Math.min(d[j]+1,d[j-1]+1,p+(a[i-1]===b[j-1]?0:1)); p=t; } } return d[b.length]; }
+function matchTok(t,vars){
+  if (/[^\x00-\x7f]/.test(t) && matchTok1(sound(t),vars)) return true;
+  return matchTok1(t,vars) || matchTok1(lat(t),vars);
+}
+function matchTok1(t,vars){
+  for (const v of vars){
+    if (t===v) return true;
+    if (/[^\x00-\x7f]/.test(v)){ if (v.length>=2 && t.startsWith(v)) return true; }
+    else { if (v.length>=4 && t.startsWith(v) && t.length-v.length<=3) return true; if (v.length>=5 && lev(t,v)<=1) return true; }
+  }
+  return false;
+}
+const FILLER = setOf(['dal','daal','ডাল','दाल']);
+const toks = p => p.split(' ').filter(t=>t && !FILLER.has(t));
+function tokEq(a,b){
+  if (a===b) return true;
+  const sa=sound(a), sb=sound(b);
+  if (sa===sb || (sa.length>=4 && sb.length>=4 && lev(sa,sb)<=1)) return true;
+  if (/[^\x00-\x7f]/.test(a+b)) return a.length>=2 && b.length>=2 && (a.startsWith(b)||b.startsWith(a));
+  return a.length>=4 && b.length>=4 && lev(a,b)<=1;
+}
+function phraseMatch(spoken, word){
+  const s=toks(spoken), w=toks(word);
+  if (!s.length || !w.length) return spoken===word;
+  return w.every(x=>s.some(y=>tokEq(x,y))) && s.every(y=>w.some(x=>tokEq(x,y)));
+}
+function resolve(names, ctx){
+  const phrase=names.join(' ');
+  const items=ctx.items;
+  if (ctx.aliases && ctx.aliases[phrase]){ const it=items.find(x=>x.id===ctx.aliases[phrase]); if (it) return {type:'item',item:it}; }
+  for (const c of items.filter(x=>x.words)){ if (c.words.some(w=>w && phraseMatch(phrase,w))) return {type:'item',item:c}; }
+  const found=new Set();
+  for (const t of names) for (const [c,vars] of Object.entries(CONCEPT_N)) if (matchTok(t,vars)) found.add(c);
+  const builtin=items.filter(x=>x.need);
+  const full=builtin.filter(it=>it.need.every(c=>found.has(c)));
+  if (full.length){ const mx=Math.max(...full.map(x=>x.need.length)); const best=full.filter(x=>x.need.length===mx); if (best.length===1) return {type:'item',item:best[0]}; return {type:'ambiguous',options:best,head:best[0].head}; }
+  const mods=builtin.filter(it=>it.need.some(c=>c!==it.head && found.has(c)));
+  if (mods.length===1) return {type:'item',item:mods[0]};
+  const heads=builtin.filter(it=>found.has(it.head));
+  if (heads.length===1) return {type:'item',item:heads[0]};
+  if (heads.length>1) return {type:'ambiguous',options:heads,head:heads[0].head};
+  return {type:'new', name: phrase.replace(/(^|\s)([a-z])/g,(m,a,b)=>a+b.toUpperCase())};
+}
+let _uid=0; const uid=()=>'l'+Date.now().toString(36)+(_uid++);
+const lineKey = l => l.itemId || ('new:'+N(l.name));
+function fill(line,a,o){
+  let {qty,unit,rate,bare}=a;
+  if (bare!==null){
+    if (o.preferMissing && line.rate==null && line.qty!=null) rate=bare;
+    else if (o.preferMissing && line.qty==null && line.rate!=null) qty=bare;
+    else if (bare>10) rate=bare; else qty=bare;
+  }
+  if (qty!==null){ line.qty = (o.add && line.qty!=null) ? Math.round((line.qty+qty)*1000)/1000 : qty; if (unit) line.unit=unit; }
+  if (rate!==null){ line.rate=rate; delete line.ok; }
+}
+function applyUtterance(bill,text,ctx){
+  const rep={changed:[],unclear:false,notes:[]};
+  for (const seg of segment(lex(text))) applySeg(bill,seg,ctx,rep);
+  return rep;
+}
+function applySeg(bill,seg,ctx,rep){
+  const names=seg.filter(x=>x.type==='name').map(x=>x.text);
+  const nums=seg.filter(x=>x.type==='num');
+  const verbs=new Set(seg.filter(x=>x.type==='verb').map(x=>x.kind));
+  const a=assignNums(nums);
+  const L=bill.lines;
+  if (!names.length){
+    if (verbs.has('remove')){ const l=L.find(x=>x.id===bill.focusId)||L[L.length-1]; if (l){ bill.lines=L.filter(x=>x!==l); rep.notes.push('Removed '+l.name); } return; }
+    if (!nums.length) return;
+    const target=L.find(x=>x.id===bill.focusId)||L[L.length-1];
+    if (!target){ rep.unclear=true; rep.notes.push('Say the item name too.'); return; }
+    fill(target,a,{preferMissing:true}); rep.changed.push(target.id); bill.focusId=target.id; return;
+  }
+  const r=resolve(names,ctx);
+  let item=null, existing=null;
+  // answering "which one?" by voice: "bhanga" fills the open choice line
+  const ask=L.find(l=>l.id===bill.focusId && l.options);
+  if (ask && r.type==='item' && ask.options.includes(r.item.id) && !L.some(l=>l.itemId===r.item.id)){
+    Object.assign(ask,{itemId:r.item.id,name:r.item.name,alt:r.item.alt||''}); delete ask.options;
+    fill(ask,a,{}); rep.changed.push(ask.id); return;
+  }
+  if (r.type==='ambiguous'){
+    const onBill=L.filter(l=>r.options.some(o=>o.id===l.itemId));
+    if (onBill.length===1){ existing=onBill[0]; }
+    else {
+      if (verbs.has('remove')){ rep.unclear=true; rep.notes.push('Which '+HEAD_LABEL[r.head]+' should be removed?'); return; }
+      const line={id:uid(),itemId:null,name:names.join(' '),alt:'',qty:null,unit:'kg',rate:null,options:r.options.map(o=>o.id),raw:names.join(' ')};
+      fill(line,a,{}); L.push(line); rep.changed.push(line.id); bill.focusId=line.id; rep.notes.push('Which '+HEAD_LABEL[r.head]+'? Tap one on the bill.'); return;
+    }
+  } else if (r.type==='item'){ item=r.item; existing=L.find(l=>l.itemId===item.id); }
+  else { existing=L.find(l=>!l.itemId && phraseMatch(N(l.raw||l.name), names.join(' '))); }
+  if (verbs.has('remove')){
+    if (existing){ bill.lines=L.filter(x=>x!==existing); rep.notes.push('Removed '+existing.name); }
+    else rep.notes.push('That item is not on this bill.');
+    return;
+  }
+  if (existing){ fill(existing,a,{add:verbs.has('add')}); rep.changed.push(existing.id); bill.focusId=existing.id; return; }
+  const line = item ? {id:uid(),itemId:item.id,name:item.name,alt:item.alt||'',qty:null,unit:item.unit||'kg',rate:null}
+                    : {id:uid(),itemId:null,name:r.name,alt:'',qty:null,unit:'kg',rate:null,isNew:true,raw:names.join(' ')};
+  if (!item) rep.unclear=true;
+  fill(line,a,{}); L.push(line); rep.changed.push(line.id); bill.focusId=line.id;
+}
+/* Whole-utterance voice commands */
+const CMDS=[
+  ['save',['bill save','save','save karo','save kar do','bill done','done','ho gaya','bas','सेव','बिल सेव','हो गया','बस','সেভ','সেভ করো','বিল শেষ','bill shesh','হয়ে গেছে','ব্যাস','বাস']],
+  ['new',['naya bill','new bill','next bill','agla bill','notun bill','नया बिल','अगला बिल','নতুন বিল']],
+  ['total',['total','total kitna','total koto','kitna hua','koto holo','टोटल','कुल','कितना हुआ','টোটাল','মোট','মোট কত','কত হল','কত হলো']],
+  ['ok',['ok','okay','correct','thik hai','theek hai','sahi hai','haan sahi hai','rate sahi hai','haan','ठीक है','सही है','हाँ','हाँ सही है','ঠিক আছে','ঠিক','হ্যাঁ','হ্যাঁ ঠিক আছে','thik ache']],
+  ['read',['read','read bill','bill padho','bill bolo','bill shunao','बिल पढ़ो','बिल बोलो','बिल सुनाओ','বিল পড়ো','বিল বলো','বিল শোনাও']]
+];
+const CUST=setOf(['customer','party','grahak','naam','ग्राहक','पार्टी','কাস্টমার','পার্টি','খদ্দের']);
+const canon=t=>tokenize(t).filter(x=>!STOP.has(x)).map(sound).join(' ');
+const CMD_MAP=new Map(); for (const [k,ps] of CMDS) for (const p of ps) CMD_MAP.set(canon(p),k);
+function command(text){
+  const T=tokenize(text);
+  if (T.length>=2 && CUST.has(T[0])) return {kind:'customer', value:text.trim().split(/\s+/).slice(1).join(' ')};
+  const c=canon(text); if (CMD_MAP.has(c)) return {kind:CMD_MAP.get(c)};
+  if (c.length>=6) for (const [k,v] of CMD_MAP) if (k.length>=6 && lev(c,k)<=1) return {kind:v};
+  return null;
+}
+/*PARSER-END*/
+
+/* ---------- App ---------- */
+const $=id=>document.getElementById(id);
+const store={ get(k,d){ try{ const v=localStorage.getItem('vcm.'+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+              set(k,v){ try{ localStorage.setItem('vcm.'+k,JSON.stringify(v)); }catch(e){} } };
+const use = name => (window.claude && typeof window.claude.use==='function') ? window.claude.use(name).catch(()=>null) : Promise.resolve(null);
+let learned=store.get('learned',[]);   // items the app picked up from saved bills
+let aliases=store.get('aliases',{});
+let bills=store.get('bills',[]);
+let hist=store.get('hist',{});          // item key -> {name, pts:[{d,r,u}]}
+let alarmPct=store.get('alarmPct',20);
+let lang=store.get('lang','bn');
+let bill=store.get('draft',null);
+let snapshot=null, lastText='', openId=null;
+const ctx=()=>({items:[...BUILTIN,...learned],aliases});
+/* Example rates, used only before the first real bill is saved, so the price alarm can be tried. */
+const DEMO_HIST={'sona-moong':{name:'Sona moong dal',pts:[145,142,146,144].map(r=>({r,u:'kg'}))},
+  'lal-badam':{name:'Lal badam',pts:[180,178,182].map(r=>({r,u:'kg'}))},
+  'bada-masur':{name:'Bada masur',pts:[92,94,91].map(r=>({r,u:'kg'}))},
+  'rahar-dal':{name:'Rahar dal',pts:[3200,3150].map(r=>({r,u:'bag'}))}};
+const usingDemo=()=>false; // the shop version learns only from real bills
+const todayStr=()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const UNIT_LABEL={kg:'kg',bag:'bag',pkt:'pkt',box:'box',pc:'pc',dozen:'dozen',quintal:'qtl',L:'L'};
+const inr=n=>'₹'+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
+const q=n=>String(Math.round(n*1000)/1000);
+const amount=l=>(l.qty!=null&&l.rate!=null)?Math.round(l.qty*l.rate*100)/100:null;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const itemById=id=>ctx().items.find(x=>x.id===id);
+
+function newBill(){ return {no:(bills.length?bills[bills.length-1].no:0)+1, customer:'', lines:[], focusId:null, example:false}; }
+function saveDraft(){ store.set('draft',bill); }
+
+const daysAgo=d=>Math.round((new Date(todayStr())-new Date(d))/864e5);
+function usual(key,unit){
+  const e=hist[key] || (usingDemo()?DEMO_HIST[key]:null); if (!e) return null;
+  let pts=e.pts.filter(p=>p.u===unit);
+  const recent=pts.filter(p=>!p.d||daysAgo(p.d)<=7);
+  pts=(recent.length?recent:pts).slice(-15);
+  if (!pts.length) return null;
+  const s=pts.map(p=>p.r).sort((a,b)=>a-b);
+  return {med:s[Math.floor(s.length/2)], n:pts.length, last:pts[pts.length-1].r};
+}
+function rateFlag(l){
+  if (l.rate==null || l.ok) return null;
+  const u=usual(lineKey(l),l.unit||'kg'); if (!u) return null;
+  const diff=(l.rate-u.med)/u.med;
+  if (Math.abs(diff)*100>=alarmPct) return {pct:Math.round(diff*100), med:u.med};
+  return null;
+}
+let audioCtx=null;
+function alarm(){
+  try{ navigator.vibrate && navigator.vibrate([250,120,250]); }catch(e){}
+  try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    [0,0.28].forEach(t=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.frequency.value=880; o.type='square';
+      g.gain.setValueAtTime(0.12,audioCtx.currentTime+t); g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+t+0.2);
+      o.connect(g).connect(audioCtx.destination); o.start(audioCtx.currentTime+t); o.stop(audioCtx.currentTime+t+0.22); });
+  }catch(e){}
+}
+
+function render(flashIds=[]){
+  $('billNo').textContent='#'+bill.no;
+  $('billDate').textContent=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  $('customer').value=bill.customer||'';
+  $('exampleNote').hidden=!bill.example;
+  const ol=$('lines'); ol.innerHTML='';
+  let alarms=0;
+  let total=0, missing=0;
+  bill.lines.forEach(l=>{
+    const li=document.createElement('li'); li.className='line'; li.dataset.id=l.id;
+    const amt=amount(l); if (amt!=null) total+=amt; else missing++;
+    const qty=l.qty!=null?q(l.qty)+' '+UNIT_LABEL[l.unit||'kg']:'<span class="miss">qty?</span>';
+    const rate=l.rate!=null?inr(l.rate):'<span class="miss">rate?</span>';
+    let html=`<div class="l-name">${esc(l.options?l.name+' (which one?)':l.name)}${l.alt?`<span class="l-alt">${esc(l.alt)}</span>`:''}</div>
+      <div class="l-calc">${qty} × ${rate}</div><div class="l-amt">${amt!=null?inr(amt):'—'}</div>`;
+    if (l.options) html+=`<div class="opts">${l.options.map(id=>{const it=itemById(id);return it?`<button data-pick="${id}">${esc(it.name)}</button>`:''}).join('')}</div>`;
+    const flag=rateFlag(l);
+    if (flag){ alarms++; li.classList.add('alarm');
+      html+=`<div class="alarm-box"><b>Price alarm:</b> ${inr(l.rate)} is ${Math.abs(flag.pct)}% ${flag.pct>0?'higher':'lower'} than the usual ${inr(flag.med)}. Mistake?
+        <div class="opts"><button type="button" data-fix="${l.id}">Fix rate</button><button type="button" data-ok="${l.id}">Rate is correct</button></div></div>`; }
+    if (l.isNew) html+=`<span class="tag new">New item, will be remembered when saved</span>`;
+    if (openId===l.id) html+=editHtml(l);
+    li.innerHTML=html; ol.appendChild(li);
+  });
+  bill.alarms=alarms;
+  $('alarmBar').hidden=!(alarms && bill.wantSave);
+  if (!alarms) bill.wantSave=false;
+  $('empty').hidden=bill.lines.length>0;
+  $('total').textContent=inr(Math.round(total));
+  const n=bill.lines.length;
+  $('itemCount').textContent=n+(n===1?' item':' items')+(missing?` · ${missing} incomplete`:'');
+  const r=Math.round(total)-total; $('roundNote').textContent=Math.abs(r)>0.001?'Round off '+(r>0?'+':'')+r.toFixed(2):'';
+  const f=bill.lines.find(l=>l.id===bill.focusId);
+  const p=$('prompt');
+  if (f && f.options){ p.hidden=false; p.textContent='Which '+f.name+'? Tap one on the bill.'; }
+  else if (f && (f.qty==null||f.rate==null)){ p.hidden=false; p.textContent='Say the '+(f.qty==null?'quantity':'rate')+' for '+f.name+'.'; }
+  else p.hidden=true;
+  $('waBtn').href='https://wa.me/?text='+encodeURIComponent(billText());
+  for (const id of flashIds){ const el=ol.querySelector(`[data-id="${id}"]`); if (el){ el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),60); } }
+  renderToday(); saveDraft();
+}
+function editHtml(l){
+  const opts=ctx().items.map(it=>`<option value="${it.id}" ${l.itemId===it.id?'selected':''}>${esc(it.name)}</option>`).join('');
+  return `<form class="edit" data-edit="${l.id}">
+    <label class="field full" for="e-item"><span class="lbl">Item</span><select id="e-item">${l.itemId?'':`<option value="" selected>${esc(l.name)} (as said)</option>`}${opts}</select></label>
+    <label class="field" for="e-qty"><span class="lbl">Quantity</span><input id="e-qty" type="number" inputmode="decimal" step="any" value="${l.qty??''}"></label>
+    <label class="field" for="e-unit"><span class="lbl">Unit</span><select id="e-unit">${Object.entries(UNIT_LABEL).map(([k,v])=>`<option value="${k}" ${l.unit===k?'selected':''}>${v}</option>`).join('')}</select></label>
+    <label class="field full" for="e-rate"><span class="lbl">Rate (₹ per unit)</span><input id="e-rate" type="number" inputmode="decimal" step="any" value="${l.rate??''}"></label>
+    <div class="acts"><button type="button" class="del" data-del="${l.id}">Remove item</button><button type="submit" class="primary">Done</button></div></form>`;
+}
+function renderToday(){
+  const t=todayStr(), tb=bills.filter(b=>b.date===t);
+  $('todaySum').textContent=tb.length?`${tb.length} bill${tb.length>1?'s':''} saved · ${inr(tb.reduce((s,b)=>s+b.total,0))}`:'No bills saved yet today.';
+  const ul=$('todayRates'); ul.innerHTML='';
+  const src=usingDemo()?DEMO_HIST:hist;
+  for (const e of Object.values(src)){
+    const pts=e.pts.filter(p=>!p.d||p.d===t); if (!pts.length) continue;
+    const li=document.createElement('li'); li.innerHTML=`<span>${esc(e.name)}</span><span>${pts.slice(-6).map(p=>inr(p.r)).join(' → ')}</span>`; ul.appendChild(li);
+  }
+  $('demoNote').hidden=!usingDemo();
+  $('learnCount').textContent=learned.length?`${learned.length} item${learned.length>1?'s':''} learned from your bills so far.`:'No items learned yet. Save a few bills and they will appear here.';
+}
+function billText(){
+  const lines=bill.lines.map((l,i)=>{const a=amount(l);return `${i+1}. ${l.name} ${l.qty!=null?q(l.qty)+' '+UNIT_LABEL[l.unit]:'?'} x ${l.rate!=null?inr(l.rate):'?'} = ${a!=null?inr(a):'?'}`;});
+  const tot=bill.lines.reduce((s,l)=>s+(amount(l)||0),0);
+  return [`Bill #${bill.no} · ${new Date().toLocaleDateString('en-IN')}`, bill.customer?`Customer: ${bill.customer}`:null, ...lines, `Total: ${inr(Math.round(tot))}`].filter(Boolean).join('\n');
+}
+function renderItems(){
+  $('itemList').innerHTML=ctx().items.map(it=>{ const u=usual(it.id,it.unit||'kg')||usual(it.id,'bag');
+    return `<li><b>${esc(it.name)}</b>${it.alt?` <span class="l-alt">${esc(it.alt)}</span>`:''}${u?` <span class="say">· usual ${inr(u.med)}</span>`:''}<br><span class="say">Heard as: ${esc(it.say||(it.words||[]).join(', '))}</span></li>`; }).join('');
+}
+let toastT; function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2600); }
+
+/* Speaking back */
+let ttsNs=null, readBack=store.get('readBack',true);
+use('tts').then(t=>{ ttsNs=t; });
+const UNIT_WORD={kg:'kilo',bag:'bosta',pkt:'packet',box:'peti',pc:'piece',dozen:'dozen',quintal:'quintal',L:'litre'};
+const nSay=n=>String(Math.round(n*1000)/1000);
+function say(text,force){
+  if (!readBack && !force) return;
+  if (ttsNs){ ttsNs.speak(text).catch(()=>{}); return; }
+  try{ const u=new SpeechSynthesisUtterance(text); u.lang='en-IN'; speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){}
+}
+function lineSpeech(l){
+  if (l.options) return 'Which '+l.name+'? '+l.options.map(id=>itemById(id)?.name).filter(Boolean).join(', or ')+'?';
+  if (l.qty==null) return l.name+'. How much?';
+  if (l.rate==null) return l.name+', '+nSay(l.qty)+' '+UNIT_WORD[l.unit]+'. What rate?';
+  return l.name+', '+nSay(l.qty)+' '+UNIT_WORD[l.unit]+' at '+nSay(l.rate)+'. '+nSay(amount(l))+' rupees.';
+}
+const billTotal=()=>Math.round(bill.lines.reduce((s,l)=>s+(amount(l)||0),0));
+function runCommand(c){
+  if (c.kind==='customer'){ bill.customer=c.value; if (bill.example) bill=Object.assign(newBill(),{customer:c.value}); render(); say('Customer '+c.value); return; }
+  if (c.kind==='save'){ saveBill(false); return; }
+  if (c.kind==='total'){ say(`Total ${billTotal()} rupees, ${bill.lines.length} items.`,true); toast('Total '+inr(billTotal())); return; }
+  if (c.kind==='read'){ say(bill.lines.map(lineSpeech).join(' ')+` Total ${billTotal()} rupees.`,true); return; }
+  if (c.kind==='ok'){ const want=bill.wantSave; let n=0; bill.lines.forEach(l=>{ if (rateFlag(l)){ l.ok=true; n++; } });
+    if (n && want){ saveBill(true); return; } render(); say(n?'Okay, rate accepted.':'Okay.'); return; }
+  if (c.kind==='new'){
+    if (bill.lines.length && !bill.example && !bill.confirmNew){ bill.confirmNew=true; toast('This bill is not saved. Say “save”, or say “new bill” again to throw it away.'); say('This bill is not saved. Say save. Or say new bill again to clear it.'); return; }
+    bill=newBill(); openId=null; render(); say('New bill.'); $('heard').textContent='New bill. Tap the mic and speak.'; return;
+  }
+}
+
+function processText(text){
+  text=text.trim(); if (!text) return;
+  $('heard').textContent='“'+text+'”'; $('heard').classList.remove('live');
+  const cmd=command(text);
+  if (cmd){ runCommand(cmd); $('aiBtn').hidden=true; return; }
+  snapshot=JSON.parse(JSON.stringify(bill)); lastText=text;
+  if (bill.example){ bill=newBill(); }
+  bill.confirmNew=false;
+  const rep=applyUtterance(bill,text,ctx());
+  openId=null;
+  render(rep.changed);
+  const alarmed=rep.changed.map(id=>bill.lines.find(x=>x.id===id)).filter(l=>l && rateFlag(l));
+  if (alarmed.length){ alarm(); rep.notes.push('Price alarm! Check the marked rate.');
+    const l=alarmed[0], f=rateFlag(l); bill.focusId=l.id;
+    setTimeout(()=>say(`Check the rate. ${l.name} at ${nSay(l.rate)}. Usual is ${nSay(f.med)}. Say the correct rate, or say thik hai.`,true),700);
+  } else if (rep.changed.length){
+    say(rep.changed.slice(-3).map(id=>bill.lines.find(x=>x.id===id)).filter(Boolean).map(lineSpeech).join(' '));
+  } else if (rep.notes.length) say(rep.notes[rep.notes.length-1]);
+  if (rep.notes.length) toast(rep.notes[rep.notes.length-1]);
+  else if (!rep.changed.length){ toast('Could not find an item or number in that. Try again, or ask Claude.'); rep.unclear=true; }
+  $('aiBtn').hidden=!(rep.unclear && sampleFn);
+}
+
+/* Bill interactions */
+$('lines').addEventListener('click',e=>{
+  const pick=e.target.closest('[data-pick]');
+  if (pick){ const li=pick.closest('.line'); const l=bill.lines.find(x=>x.id===li.dataset.id); const it=itemById(pick.dataset.pick);
+    const dup=bill.lines.find(x=>x!==l && x.itemId===it.id);
+    if (dup){ if (l.qty!=null) dup.qty=l.qty; if (l.rate!=null) dup.rate=l.rate; bill.lines=bill.lines.filter(x=>x!==l); bill.focusId=dup.id; render([dup.id]); return; }
+    Object.assign(l,{itemId:it.id,name:it.name,alt:it.alt||''}); delete l.options; bill.focusId=l.id; render([l.id]); return; }
+  const ok=e.target.closest('[data-ok]');
+  if (ok){ const l=bill.lines.find(x=>x.id===ok.dataset.ok); if (l) l.ok=true; render([l.id]); return; }
+  const fix=e.target.closest('[data-fix]');
+  if (fix){ openId=fix.dataset.fix; bill.focusId=openId; render(); const r=document.getElementById('e-rate'); if (r){ r.focus(); r.select(); } return; }
+  const del=e.target.closest('[data-del]');
+  if (del){ bill.lines=bill.lines.filter(x=>x.id!==del.dataset.del); openId=null; render(); toast('Item removed'); return; }
+  if (e.target.closest('.edit')) return;
+  const li=e.target.closest('.line'); if (!li) return;
+  openId = openId===li.dataset.id ? null : li.dataset.id; render();
+});
+$('lines').addEventListener('submit',e=>{
+  e.preventDefault(); const f=e.target; const l=bill.lines.find(x=>x.id===f.dataset.edit); if (!l) return;
+  const sel=f.querySelector('#e-item').value;
+  if (sel && sel!==l.itemId){ const it=itemById(sel); if (l.raw){ aliases[N(l.raw)]=it.id; store.set('aliases',aliases); toast(`Learned: “${l.raw}” means ${it.name}`); }
+    Object.assign(l,{itemId:it.id,name:it.name,alt:it.alt||''}); delete l.isNew; delete l.options; }
+  const qv=f.querySelector('#e-qty').value, rv=f.querySelector('#e-rate').value;
+  const nr=rv===''?null:parseFloat(rv); if (nr!==l.rate) delete l.ok;
+  l.qty=qv===''?null:parseFloat(qv); l.rate=nr; l.unit=f.querySelector('#e-unit').value;
+  openId=null; render([l.id]);
+});
+$('customer').addEventListener('input',e=>{ bill.customer=e.target.value; if (bill.example) bill.example=false; saveDraft(); $('exampleNote').hidden=true; $('waBtn').href='https://wa.me/?text='+encodeURIComponent(billText()); });
+$('typeForm').addEventListener('submit',e=>{ e.preventDefault(); processText($('typeInput').value); $('typeInput').value=''; });
+function saveBill(force){
+  if (!bill.lines.length){ toast('Add an item first.'); say('The bill is empty.'); return; }
+  const incl=bill.lines.filter(l=>amount(l)==null);
+  if (incl.length){ toast(`${incl.length} item${incl.length>1?'s are':' is'} missing a quantity or rate.`); bill.focusId=incl[0].id; render(); say('Not saved. '+lineSpeech(incl[0]),true); return; }
+  const bad=bill.lines.filter(l=>rateFlag(l));
+  if (!force && bad.length){ bill.wantSave=true; bill.focusId=bad[0].id; render(); alarm(); $('alarmBar').scrollIntoView({block:'center',behavior:'smooth'});
+    say(`Not saved. Price alarm on ${bad[0].name}, ${nSay(bad[0].rate)}. Usual is ${nSay(rateFlag(bad[0]).med)}. Say the correct rate, or say thik hai.`,true); return; }
+  const d=todayStr();
+  for (const l of bill.lines){
+    if (!l.itemId){ // learn the new item from how it was said
+      const it={id:'u-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:l.name,alt:'',unit:l.unit,words:[N(l.raw||l.name)],say:l.raw||l.name};
+      learned.push(it); l.itemId=it.id; delete l.isNew;
+    }
+    const k=lineKey(l); const e=hist[k]||(hist[k]={name:l.name,pts:[]});
+    e.pts.push({d,r:l.rate,u:l.unit}); e.pts=e.pts.filter(p=>daysAgo(p.d)<=30).slice(-60);
+  }
+  const total=Math.round(bill.lines.reduce((s,l)=>s+amount(l),0));
+  bills.push({no:bill.no,date:d,customer:bill.customer,total,example:!!bill.example,lines:bill.lines.map(l=>({key:lineKey(l),name:l.name,qty:l.qty,unit:l.unit,rate:l.rate}))});
+  bills=bills.slice(-500);
+  store.set('bills',bills); store.set('hist',hist); store.set('learned',learned);
+  toast(`Bill #${bill.no} saved · ${inr(total)}`); say(`Bill saved. Total ${total} rupees.`); bill=newBill(); openId=null; renderItems(); render();
+}
+$('saveBtn').addEventListener('click',()=>saveBill(false));
+$('saveAnyway').addEventListener('click',()=>{ bill.lines.forEach(l=>{ if (rateFlag(l)) l.ok=true; }); saveBill(true); });
+$('alarmPct').value=String(alarmPct);
+$('alarmPct').addEventListener('change',e=>{ alarmPct=+e.target.value; store.set('alarmPct',alarmPct); render(); });
+$('newBtn').addEventListener('click',()=>{ bill=newBill(); openId=null; render(); $('heard').textContent='New bill. Tap the mic and speak.'; $('aiBtn').hidden=true; });
+$('copyBtn').addEventListener('click',()=>{ const txt=billText();
+  try{ navigator.clipboard.writeText(txt).then(()=>toast('Bill copied'),()=>fallbackCopy(txt)); }catch(e){ fallbackCopy(txt); } });
+function fallbackCopy(txt){ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');toast('Bill copied');}catch(e){toast('Select and copy the text manually.');} ta.remove(); }
+
+/* Examples */
+const EXAMPLES=[
+  'sona moong দু কেজি 145 rupaye আর lal बादाम सवा किलो 180',
+  'দো কিলো ভাঙা masoor ৯২ টাকা',
+  'sona moong do kilo 145 aur lal badam paanch kilo 180',
+  'সোনা মুগ দু কেজি ১৪৫ টাকা আর ভাঙা মসুর তিন কেজি ৯২',
+  'बड़ा मसूर ढाई किलो 98 रुपये',
+  'masur 4 kilo 95',
+  'bhanga',
+  'ek bosta rahar dal 3200',
+  'kabuli chana das kilo 110',
+  'sona moong 14',
+  'nahi nahi 142',
+  'aro ek kilo sona moong',
+  'lal badam hatao',
+  'customer Gupta',
+  'মোট কত',
+  'ho gaya'
+];
+$('examples').innerHTML=EXAMPLES.map((x,i)=>`<button type="button" data-ex="${i}">${esc(x)}</button>`).join('');
+$('examples').addEventListener('click',e=>{ const b=e.target.closest('[data-ex]'); if (b) processText(EXAMPLES[+b.dataset.ex]); });
+
+/* Language chips */
+function renderLang(){ document.querySelectorAll('[data-lang]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.lang===lang))); }
+document.querySelectorAll('[data-lang]').forEach(b=>b.addEventListener('click',()=>{ lang=b.dataset.lang; store.set('lang',lang); renderLang(); }));
+
+/* Voice: the phone's own free Google speech recognition (Chrome) */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const LANG_CODE = {bn:'bn-IN', hi:'hi-IN', en:'en-IN'};
+if (!LANG_CODE[lang]) lang='bn';
+const dict = SR ? true : null;
+let rec=null, wantListen=false, buffer='', interim='';
+function setMic(state){
+  const m=$('mic'), lb=$('micLabel');
+  m.classList.toggle('on', state==='listening'||state==='finishing');
+  if (!dict){ m.classList.add('off'); lb.textContent='Type'; m.setAttribute('aria-label','Voice needs Google Chrome. Type instead.'); return; }
+  m.classList.remove('off');
+  lb.textContent = state==='listening'?'Done': state==='finishing'?'…':'Speak';
+  m.setAttribute('aria-label', state==='listening'?'Stop and add to bill':'Start speaking');
+}
+function finish(){
+  const t=(buffer+' '+interim).trim(); buffer=''; interim=''; setMic('idle');
+  if (t) processText(t); else { $('heard').classList.remove('live'); $('heard').textContent='Did not hear anything. Tap the mic and speak again.'; }
+}
+function startRec(){
+  rec=new SR();
+  rec.lang=LANG_CODE[lang]; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1;
+  rec.onresult=e=>{
+    let live='';
+    for (let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if (r.isFinal) buffer=(buffer+' '+r[0].transcript).trim(); else live+=r[0].transcript; }
+    interim=live;
+    $('heard').textContent=(buffer+' '+interim).trim()||'Listening…';
+    $('heard').classList.toggle('live',!!interim);
+  };
+  rec.onerror=e=>{
+    if (e.error==='not-allowed'||e.error==='service-not-allowed'){ wantListen=false; toast('Microphone is blocked. In Chrome, tap the lock icon next to the address and allow the microphone.'); }
+    else if (e.error==='network'){ wantListen=false; toast('No internet. Voice needs mobile data. Type the items for now.'); }
+    else if (e.error==='language-not-supported'){ wantListen=false; toast('This language is not available on this phone. Try another language.'); }
+    else if (e.error==='audio-capture'){ wantListen=false; toast('No microphone found. Check the collar mic is plugged in.'); }
+  };
+  rec.onend=()=>{ interim=''; if (wantListen){ try{ rec.start(); return; }catch(_){} } finish(); };
+  try{ rec.start(); setMic('listening'); }catch(e){ wantListen=false; setMic('idle'); toast('Could not start the microphone. Try again.'); }
+}
+$('mic').addEventListener('click',()=>{
+  if (!SR){ toast('Voice needs Google Chrome on the phone. Type the items for now.'); $('typeInput').focus(); return; }
+  if (wantListen){ wantListen=false; setMic('finishing'); try{ rec.stop(); }catch(_){ finish(); } return; }
+  try{ speechSynthesis.cancel(); }catch(_){}
+  buffer=''; interim=''; wantListen=true;
+  $('heard').textContent='Listening…'; $('heard').classList.add('live');
+  startRec();
+});
+let sampleFn=null; // Claude reading is only available inside the claude.ai demo
+
+/* Share, backup and restore */
+$('shareBtn').addEventListener('click',async()=>{
+  const text=billText();
+  if (navigator.share){ try{ await navigator.share({text}); return; }catch(e){ if (e && e.name==='AbortError') return; } }
+  location.href='https://wa.me/?text='+encodeURIComponent(text);
+});
+$('backupBtn').addEventListener('click',()=>{
+  const data={app:'voice-cash-memo',version:1,saved:new Date().toISOString(),bills,hist,learned,aliases,alarmPct};
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='memo-backup-'+todayStr()+'.json';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  store.set('lastBackup',todayStr()); renderBackup(); toast('Backup file saved to Downloads');
+});
+$('restoreInput').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0]; if (!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if (d.app!=='voice-cash-memo') throw 0;
+      bills=d.bills||[]; hist=d.hist||{}; learned=d.learned||[]; aliases=d.aliases||{}; if (d.alarmPct) alarmPct=d.alarmPct;
+      store.set('bills',bills); store.set('hist',hist); store.set('learned',learned); store.set('aliases',aliases); store.set('alarmPct',alarmPct);
+      $('alarmPct').value=String(alarmPct); renderItems(); render(); toast(`Restored ${bills.length} bills`);
+    }catch(_){ toast('That file is not a memo backup.'); } };
+  rd.readAsText(f); e.target.value='';
+});
+function renderBackup(){
+  const lb=store.get('lastBackup',null);
+  $('backupNote').textContent = lb ? `Last backup: ${lb}. Save one at the end of each day.` : 'No backup yet. Save one at the end of each day and keep a copy on WhatsApp or Google Drive.';
+}
+
+$('readBackBtn').setAttribute('aria-pressed',String(readBack));
+$('readBackBtn').addEventListener('click',()=>{ readBack=!readBack; store.set('readBack',readBack); $('readBackBtn').setAttribute('aria-pressed',String(readBack)); if (readBack) say('Read back is on.'); });
+
+/* Start */
+if (!bill || bill.example) bill=newBill();
+renderLang(); renderItems(); renderBackup(); setMic('idle'); render();
+if ('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
+
